@@ -1,0 +1,25 @@
+$extensions.setSubscriptionFilter({
+    "filterGroup": [
+        {
+           "filters" : [
+                {
+                    "fieldName" : "blackPlayer",
+                    "operator" : "eq",
+                    "value" : $context.args.user.toLowerCase()
+                }
+           ]
+
+        },
+        {
+           "filters" : [
+                {
+                    "fieldName" : "whitePlayer",
+                    "operator" : "eq",
+                    "value" : $context.args.user.toLowerCase()
+                }
+           ]
+        }
+    ]
+})
+
+$util.toJson($context.result)

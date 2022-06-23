@@ -1,0 +1,49 @@
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
+}
+
+type Query {
+    game(id: ID!): Game
+    myBlackGames: [Game]
+    myWhiteGames: [Game]
+}
+type Mutation {
+    makeMove(gameId: ID!, newGameState: String!): Game
+    findGame: String
+    createGame(blackPlayer: ID!, whitePlayer: ID!): Game
+}
+
+type Subscription {
+    onMakeMove(gameId: ID!): Game @aws_subscribe(mutations: ["makeMove"])
+    onCreateGame(user: ID!): Game @aws_subscribe(mutations: ["createGame"])
+}
+
+enum GameResult {
+    WHITE_WIN
+    BLACK_WIN
+    TIE
+}
+
+enum ResultReason {
+    WHITE_FORFEIT
+    BLACK_FORFEIT
+    TIE_BY_AGREEMENT
+    TIE_BY_REPETITION
+    TIE_BY_NO_CAPTURE_OR_PIECE_MOVEMENT
+    WHITE_CANNOT_MOVE
+    BLACK_CANNOT_MOVE
+    WHITE_HAS_NO_PIECES
+    BLACK_HAS_NO_PIECES
+}
+
+type Game {
+    gameId: ID
+    whitePlayer: ID
+    blackPlayer: ID
+    currentGameState: String
+    gameStateHistory: [String]
+    gameResult: GameResult
+    gameResultReason: ResultReason
+}

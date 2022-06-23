@@ -1,0 +1,13 @@
+{
+    "version" : "2017-02-28",
+    "operation" : "Query",
+    "query" : {
+        "expression" : "blackPlayer = :user",
+        "expressionValues" : {
+            ":user" : $util.dynamodb.toDynamoDBJson($ctx.identity.username.toLowerCase())
+        }
+    },
+    "index" : "BlackPlayer",
+    "select" : "ALL_ATTRIBUTES"
+}
+

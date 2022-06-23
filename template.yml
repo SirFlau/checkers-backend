@@ -1,0 +1,278 @@
+Transform: AWS::Serverless-2016-10-31
+Description: Checkers Resources
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: python3.9
+    Layers:
+      - arn:aws:lambda:eu-west-1:367899993810:layer:Checkers2022:1
+
+Resources:
+
+  ValidateMoveLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: Datasources/ValidateMove/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+
+  MatchMakerLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: Datasources/MatchMaker/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      ReservedConcurrentExecutions: 1
+      Events:
+        DynamoDBEvent:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream: !GetAtt FindGameDynamoDBTable.StreamArn
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+
+  AccessDynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AccessDynamoDBPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:*
+            Resource: "*"
+      Roles:
+        - !Ref LambdaRole
+
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      DefinitionS3Location: s3://schema-and-resolvers/schema.graphql
+
+  GamesDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: gameId
+          AttributeType: S
+        - AttributeName: whitePlayer
+          AttributeType: S
+        - AttributeName: blackPlayer
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: WhitePlayer
+          KeySchema:
+            - AttributeName: whitePlayer
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: BlackPlayer
+          KeySchema:
+          - AttributeName: blackPlayer
+            KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      KeySchema:
+        - AttributeName: gameId
+          KeyType: HASH
+      TableName: GameTable
+
+  FindGameDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: user
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: user
+          KeyType: HASH
+      TableName: FindGameTable
+      StreamSpecification:
+        StreamViewType: KEYS_ONLY
+
+  GameDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      Name: GameDataSource
+      Type: AMAZON_DYNAMODB
+      DynamoDBConfig:
+        AwsRegion: !Sub ${AWS::Region}
+        TableName: "GameTable"
+      ServiceRoleArn: !GetAtt GameDataRole.Arn
+
+  MakeMoveDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      Name: MakeMoveDataSource
+      Type: AWS_LAMBDA
+      LambdaConfig:
+        LambdaFunctionArn: !GetAtt ValidateMoveLambda.Arn
+      ServiceRoleArn: !GetAtt AppSyncRole.Arn
+
+  FindGameDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      Name: FindGameDataSource
+      Type: AMAZON_DYNAMODB
+      DynamoDBConfig:
+        AwsRegion: !Sub ${AWS::Region}
+        TableName: "FindGameTable"
+      ServiceRoleArn: !GetAtt GameDataRole.Arn
+
+  NoneDataSource:
+    Type: "AWS::AppSync::DataSource"
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      Name: "NoneDataSource"
+      Type: "NONE"
+      ServiceRoleArn: !GetAtt GameDataRole.Arn
+
+  GameDataRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+
+  GameDataPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GameDataPolicy
+      Roles:
+        - !Ref GameDataRole
+      PolicyDocument:
+        Statement:
+          - Action: dynamodb:PutItem
+            Effect: Allow
+            Resource:
+              - !GetAtt GamesDynamoDBTable.Arn
+              - !GetAtt FindGameDynamoDBTable.Arn
+          - Action: dynamodb:GetItem
+            Effect: Allow
+            Resource:
+              - !GetAtt GamesDynamoDBTable.Arn
+          - Action: dynamodb:Query
+            Effect: Allow
+            Resource:
+              - !Join [ /, [!GetAtt GamesDynamoDBTable.Arn, index/*  ] ]
+              - !GetAtt GamesDynamoDBTable.Arn
+          - Action: dynamodb:UpdateItem
+            Effect: Allow
+            Resource:
+              - !GetAtt GamesDynamoDBTable.Arn
+
+  GameResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: game
+      TypeName: Query
+      DataSourceName: !GetAtt GameDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/get_game_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/response.vtl
+
+  MakeMoveResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: makeMove
+      TypeName: Mutation
+      DataSourceName: !GetAtt MakeMoveDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/make_move_lambda_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/response.vtl
+
+  MyBlackGamesResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: myBlackGames
+      TypeName: Query
+      DataSourceName: !GetAtt GameDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/my_black_games_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/list_response.vtl
+
+  MyWhiteGamesResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: myWhiteGames
+      TypeName: Query
+      DataSourceName: !GetAtt GameDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/my_white_games_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/list_response.vtl
+
+  FindGameResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: findGame
+      TypeName: Mutation
+      DataSourceName: !GetAtt FindGameDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/find_game_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/response.vtl
+
+  CreateGameResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: createGame
+      TypeName: Mutation
+      DataSourceName: !GetAtt GameDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/create_game_request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/response.vtl
+
+  OnCreateGameResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: "hzef2rjlane4fdff3i5gctmuru"
+      FieldName: onCreateGame
+      TypeName: Subscription
+      DataSourceName: !GetAtt NoneDataSource.Name
+      RequestMappingTemplateS3Location: s3://schema-and-resolvers/request.vtl
+      ResponseMappingTemplateS3Location: s3://schema-and-resolvers/on_create_game_response.vtl
+
+  AppSyncRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+
+  AllowLambdaExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AllowLambdaExecutionPolicy
+      Roles:
+        - !Ref AppSyncRole
+      PolicyDocument:
+        Statement:
+          - Action: lambda:invokeFunction
+            Effect: Allow
+            Resource:
+              - !GetAtt ValidateMoveLambda.Arn

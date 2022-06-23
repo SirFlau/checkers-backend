@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "checkers-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-k33lepwtbzvt"
+s3_prefix = "checkers-app"
+region = "eu-west-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+image_repositories = []

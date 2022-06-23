@@ -1,0 +1,10 @@
+{
+    "version" : "2018-05-29",
+    "operation" : "PutItem",
+    "key": {
+        "user": $util.dynamodb.toDynamoDBJson($ctx.identity.username)
+    },
+    "attributeValues" : {
+        "user" : $util.dynamodb.toDynamoDBJson($ctx.identity.username)
+    }
+}

@@ -1,0 +1,13 @@
+{
+    "version" : "2017-02-28",
+    "operation" : "Query",
+    "query" : {
+        "expression" : "whitePlayer = :user",
+        "expressionValues" : {
+            ":user" : $util.dynamodb.toDynamoDBJson($ctx.identity.username.toLowerCase())
+        }
+    },
+    "index" : "WhitePlayer",
+    "select" : "ALL_ATTRIBUTES"
+}
+

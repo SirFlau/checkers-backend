@@ -1,0 +1,16 @@
+#set($gameId = $util.autoId() )
+
+{
+    "version" : "2018-05-29",
+    "operation" : "PutItem",
+    "key": {
+        "gameId": $util.dynamodb.toDynamoDBJson($gameId)
+    },
+    "attributeValues" : {
+        "gameId": $util.dynamodb.toDynamoDBJson($gameId),
+        "whitePlayer": $util.dynamodb.toDynamoDBJson($ctx.args.whitePlayer.toLowerCase()),
+        "blackPlayer": $util.dynamodb.toDynamoDBJson($ctx.args.blackPlayer.toLowerCase()),
+        "currentGameState": {"S": "111111111111000000003333333333330"},
+        "gameStateHistory": {"SS": ["111111111111000000003333333333330"]}
+    },
+}
